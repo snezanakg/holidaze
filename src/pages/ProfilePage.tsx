@@ -1,163 +1,98 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { Link } from "react-router-dom";
-
-const API_BASE = "https://v2.api.noroff.dev";
-const API_KEY = "2ae3e868-69f2-430f-b7cb-5f7d53949d57";
-
-interface Booking {
-  id: string;
-  dateFrom: string;
-  dateTo: string;
-  venue: {
-    id: string;
-    name: string;
-    media?: { url: string }[];
-  };
-}
 
 export default function ProfilePage() {
-  const { user } = useAuth();
-  const token = localStorage.getItem("holidaze_token");
+  const { user, updateAvatar } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
+  if (!user) {
+    return (
+      <p className="text-center mt-20 text-stone-400">
+        You must be logged in.
+      </p>
+    );
+  }
 
-  useEffect(() => {
-    if (!user) return;
-
-    async function fetchBookings() {
-      try {
-        const response = await fetch(
-          `${API_BASE}/holidaze/profiles/${user.name}/bookings?_venue=true`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "X-Noroff-API-Key": API_KEY,
-            },
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.errors?.[0]?.message);
-        }
-
-        setBookings(data.data);
-      } catch (error) {
-        console.error("Failed to load bookings", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchBookings();
-  }, [user]);
-
-  async function handleCancelBooking(id: string) {
-    if (!confirm("Cancel this booking?")) return;
+  async function handleUpdateAvatar(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
 
     try {
-      const response = await fetch(
-        `${API_BASE}/holidaze/bookings/${id}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-Noroff-API-Key": API_KEY,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to cancel booking");
-      }
-
-      // Remove from UI instantly
-      setBookings((prev) => prev.filter((b) => b.id !== id));
+      await updateAvatar(avatarUrl);
+      setMessage("Avatar updated successfully!");
+      setAvatarUrl("");
     } catch (error) {
-      alert("Error cancelling booking");
+      setMessage("Failed to update avatar.");
+    } finally {
+      setLoading(false);
     }
   }
 
-  if (!user) return null;
-
   return (
-    <div className="min-h-screen bg-stone-950 py-12 px-6 max-w-6xl mx-auto">
+    <div className="min-h-screen bg-stone-950 py-12 px-6 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-serif text-white uppercase tracking-widest mb-10">
+        My Profile
+      </h1>
 
-      {/* PROFILE HEADER */}
-      <div className="flex items-center gap-6 mb-12">
-        <img
-          src={user.avatar?.url || "https://placehold.co/100"}
-          alt={user.name}
-          className="w-24 h-24 rounded-full object-cover border border-stone-700"
-        />
+      {/* PROFILE INFO */}
+      <div className="bg-stone-900 border border-stone-800 p-8 mb-10">
+        <div className="flex items-center gap-6">
+          <img
+            src={
+              user.avatar?.url ||
+              "https://placehold.co/150x150?text=Avatar"
+            }
+            alt="Profile avatar"
+            className="w-32 h-32 object-cover rounded-full border border-stone-700"
+          />
 
-        <div>
-          <h1 className="text-3xl font-serif text-white">
-            {user.name}
-          </h1>
-          <p className="text-stone-400">{user.email}</p>
+          <div>
+            <p className="text-white text-xl font-serif">
+              {user.name}
+            </p>
+            <p className="text-stone-400">
+              {user.email}
+            </p>
+            <p className="text-amber-500 mt-2 text-sm uppercase">
+              {user.venueManager ? "Venue Manager" : "Customer"}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* BOOKINGS */}
-      <h2 className="text-2xl font-serif text-white mb-6">
-        Upcoming Bookings
-      </h2>
+      {/* UPDATE AVATAR */}
+      <div className="bg-stone-900 border border-stone-800 p-8">
+        <h2 className="text-xl font-serif text-white mb-6">
+          Update Profile Picture
+        </h2>
 
-      {loading && (
-        <p className="text-stone-400">Loading bookings...</p>
-      )}
+        <form onSubmit={handleUpdateAvatar} className="space-y-4">
+          <input
+            type="url"
+            placeholder="Paste image URL..."
+            value={avatarUrl}
+            onChange={(e) => setAvatarUrl(e.target.value)}
+            required
+            className="w-full p-3 bg-stone-950 border border-stone-800 text-white focus:outline-none focus:border-amber-600"
+          />
 
-      {!loading && bookings.length === 0 && (
-        <p className="text-stone-500">
-          You have no bookings yet.
-        </p>
-      )}
-
-      <div className="grid md:grid-cols-2 gap-6">
-        {bookings.map((booking) => (
-          <div
-            key={booking.id}
-            className="bg-stone-900 border border-stone-800 p-6 rounded-xl"
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-amber-600 text-white px-6 py-3 uppercase tracking-widest text-xs hover:bg-amber-700 transition disabled:opacity-50"
           >
-            <img
-              src={
-                booking.venue.media?.[0]?.url ||
-                "https://placehold.co/600x300"
-              }
-              alt={booking.venue.name}
-              className="w-full h-40 object-cover rounded-lg mb-4"
-            />
+            {loading ? "Updating..." : "Update Avatar"}
+          </button>
 
-            <h3 className="text-white font-semibold mb-2">
-              {booking.venue.name}
-            </h3>
-
-            <p className="text-stone-400 text-sm mb-4">
-              {new Date(booking.dateFrom).toLocaleDateString()} –{" "}
-              {new Date(booking.dateTo).toLocaleDateString()}
+          {message && (
+            <p className="text-sm mt-4 text-stone-400">
+              {message}
             </p>
-
-            <div className="flex justify-between items-center">
-              <Link
-                to={`/venue/${booking.venue.id}`}
-                className="text-amber-500 text-xs uppercase tracking-wider hover:text-amber-400"
-              >
-                View Venue
-              </Link>
-
-              <button
-                onClick={() => handleCancelBooking(booking.id)}
-                className="bg-red-700 text-white px-4 py-2 text-xs uppercase tracking-wider hover:bg-red-800 transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ))}
+          )}
+        </form>
       </div>
     </div>
   );
