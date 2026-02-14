@@ -17,24 +17,26 @@ interface Booking {
 
 export default function BookingsPage() {
   const { user } = useAuth();
+  const token = localStorage.getItem("holidaze_token");
+
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editFrom, setEditFrom] = useState("");
+  const [editTo, setEditTo] = useState("");
 
   useEffect(() => {
     if (!user) return;
 
     async function fetchBookings() {
       try {
-        const token = localStorage.getItem("holidaze_token");
-
         const response = await fetch(
           `${API_BASE}/holidaze/profiles/${user.name}/bookings?_venue=true`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
               "X-Noroff-API-Key": API_KEY,
-              "Content-Type": "application/json",
             },
           }
         );
@@ -42,12 +44,12 @@ export default function BookingsPage() {
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.errors?.[0]?.message || "Failed to fetch bookings");
+          throw new Error(data.errors?.[0]?.message);
         }
 
-        setBookings(data.data || []);
-      } catch (err: any) {
-        setError(err.message || "Something went wrong");
+        setBookings(data.data);
+      } catch (error) {
+        console.error("Failed to load bookings", error);
       } finally {
         setLoading(false);
       }
@@ -56,61 +58,150 @@ export default function BookingsPage() {
     fetchBookings();
   }, [user]);
 
-  if (loading)
-    return (
-      <div className="p-10 text-center text-stone-400">
-        Loading bookings...
-      </div>
-    );
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this booking?")) return;
 
-  if (error)
-    return (
-      <div className="p-10 text-center text-red-500">
-        {error}
-      </div>
-    );
+    try {
+      const response = await fetch(
+        `${API_BASE}/holidaze/bookings/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Noroff-API-Key": API_KEY,
+          },
+        }
+      );
 
-  if (bookings.length === 0)
-    return (
-      <div className="p-10 text-center text-stone-400">
-        No bookings yet.
-      </div>
-    );
+      if (!response.ok) {
+        throw new Error("Failed to delete booking");
+      }
+
+      setBookings((prev) => prev.filter((b) => b.id !== id));
+    } catch {
+      alert("Error deleting booking");
+    }
+  }
+
+  async function handleUpdate(id: string) {
+    try {
+      const response = await fetch(
+        `${API_BASE}/holidaze/bookings/${id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+            "X-Noroff-API-Key": API_KEY,
+          },
+          body: JSON.stringify({
+            dateFrom: editFrom,
+            dateTo: editTo,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.errors?.[0]?.message);
+      }
+
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? data.data : b))
+      );
+
+      setEditingId(null);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  if (loading) {
+    return <p className="p-6 text-stone-400">Loading bookings...</p>;
+  }
 
   return (
-    <div className="min-h-screen bg-stone-950 text-white px-6 py-12">
-      <h1 className="text-3xl font-serif mb-10 text-center">
+    <div className="min-h-screen bg-stone-950 py-12 px-6 max-w-4xl mx-auto">
+      <h1 className="text-3xl font-serif text-white mb-10 uppercase tracking-wider">
         My Bookings
       </h1>
 
-      <div className="max-w-3xl mx-auto space-y-6">
+      {bookings.length === 0 && (
+        <p className="text-stone-500">You have no bookings yet.</p>
+      )}
+
+      <div className="space-y-6">
         {bookings.map((booking) => (
           <div
             key={booking.id}
-            className="border border-stone-800 bg-stone-900 p-6 hover:border-amber-600 transition-colors"
+            className="bg-stone-900 border border-stone-800 p-6"
           >
-            <h2 className="text-xl font-serif mb-2 text-amber-500">
-              {booking.venue?.name}
+            <h2 className="text-white text-xl font-serif mb-2">
+              {booking.venue.name}
             </h2>
 
-            <p className="text-stone-400 text-sm">
-              From:{" "}
-              <span className="text-white">
-                {new Date(booking.dateFrom).toLocaleDateString()}
-              </span>
-            </p>
+            {editingId === booking.id ? (
+              <>
+                <div className="space-y-3 mb-4">
+                  <input
+                    type="date"
+                    value={editFrom}
+                    onChange={(e) => setEditFrom(e.target.value)}
+                    className="w-full p-2 bg-stone-950 border border-stone-800 text-white"
+                  />
+                  <input
+                    type="date"
+                    value={editTo}
+                    onChange={(e) => setEditTo(e.target.value)}
+                    className="w-full p-2 bg-stone-950 border border-stone-800 text-white"
+                  />
+                </div>
 
-            <p className="text-stone-400 text-sm">
-              To:{" "}
-              <span className="text-white">
-                {new Date(booking.dateTo).toLocaleDateString()}
-              </span>
-            </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleUpdate(booking.id)}
+                    className="bg-amber-600 px-4 py-2 text-xs uppercase text-white"
+                  >
+                    Save
+                  </button>
 
-            <p className="text-stone-400 text-sm">
-              Guests:{" "}
-              <span className="text-white">{booking.guests}</span>
-            </p>
+                  <button
+                    onClick={() => setEditingId(null)}
+                    className="bg-stone-700 px-4 py-2 text-xs uppercase text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-stone-400 mb-4">
+                  {new Date(booking.dateFrom).toLocaleDateString()} →{" "}
+                  {new Date(booking.dateTo).toLocaleDateString()}
+                </p>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setEditingId(booking.id);
+                      setEditFrom(booking.dateFrom.split("T")[0]);
+                      setEditTo(booking.dateTo.split("T")[0]);
+                    }}
+                    className="bg-amber-600 px-4 py-2 text-xs uppercase text-white"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(booking.id)}
+                    className="bg-red-700 px-4 py-2 text-xs uppercase text-white"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>

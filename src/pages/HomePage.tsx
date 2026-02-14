@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchFromApi } from "../utils/api";
+import Spinner from "../components/Spinner";
 
 interface Venue {
   id: string;
@@ -14,14 +15,22 @@ export default function HomePage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function loadVenues() {
       try {
-        const response = await fetchFromApi("/holidaze/venues?_bookings=true");
-        setVenues(response.data);
-      } catch (error) {
-        console.error("Failed to load venues", error);
+        setLoading(true);
+        setError("");
+
+        const data = await fetchFromApi(
+          "/holidaze/venues?_bookings=true&_limit=100"
+        );
+
+        setVenues(data.data);
+      } catch (err) {
+        console.error("Failed to load venues", err);
+        setError("Failed to load venues. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -35,17 +44,22 @@ export default function HomePage() {
   );
 
   if (loading) {
+    return <Spinner />;
+  }
+
+  if (error) {
     return (
-      <p className="text-center mt-10 text-stone-400">
-        Loading venues...
-      </p>
+      <div className="min-h-screen bg-stone-950 flex items-center justify-center">
+        <p className="text-red-500 text-lg">{error}</p>
+      </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h1 className="text-3xl font-serif font-bold mb-6 text-white">
-        Explore Venues
+    <div className="min-h-screen bg-stone-950 py-12 px-6 max-w-7xl mx-auto">
+      {/* Page Title */}
+      <h1 className="text-4xl font-serif text-white uppercase tracking-widest mb-10">
+        The Collection
       </h1>
 
       {/* Search */}
@@ -54,38 +68,48 @@ export default function HomePage() {
         placeholder="Search venues..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full mb-6 p-3 rounded bg-stone-900 border border-stone-700 text-white focus:outline-none focus:border-amber-500"
+        className="w-full mb-10 px-4 py-3 bg-stone-900 border border-stone-800 text-white focus:outline-none focus:border-amber-600 transition"
       />
 
-      {/* Grid */}
-      <div className="grid md:grid-cols-3 gap-6">
-        {filteredVenues.length === 0 && (
-          <p className="text-stone-500">No venues found.</p>
-        )}
+      {/* Empty State */}
+      {filteredVenues.length === 0 && (
+        <div className="text-center py-20">
+          <p className="text-stone-500 text-lg">
+            No venues found.
+          </p>
+        </div>
+      )}
 
+      {/* Grid */}
+      <div className="grid md:grid-cols-3 gap-8">
         {filteredVenues.map((venue) => (
           <Link
             key={venue.id}
             to={`/venue/${venue.id}`}
-            className="bg-stone-900 rounded p-4 hover:bg-stone-800 transition border border-stone-800"
+            className="bg-stone-900 border border-stone-800 hover:border-amber-600 transition p-4 group"
           >
-            {venue.media?.[0]?.url && (
-              <img
-                src={venue.media[0].url}
-                alt={venue.media[0].alt || venue.name}
-                className="h-48 w-full object-cover rounded mb-3"
-              />
-            )}
+            {/* Image */}
+            <img
+              src={
+                venue.media?.[0]?.url ||
+                "https://placehold.co/600x400?text=No+Image"
+              }
+              alt={venue.media?.[0]?.alt || venue.name}
+              className="h-56 w-full object-cover mb-4"
+            />
 
-            <h2 className="text-xl font-semibold text-white">
+            {/* Title */}
+            <h2 className="text-xl font-serif text-white mb-2 group-hover:text-amber-500 transition">
               {venue.name}
             </h2>
 
-            <p className="text-stone-400 text-sm line-clamp-2">
+            {/* Description */}
+            <p className="text-stone-400 text-sm line-clamp-2 mb-4">
               {venue.description}
             </p>
 
-            <p className="mt-2 font-bold text-amber-500">
+            {/* Price */}
+            <p className="text-amber-500 font-semibold">
               ${venue.price} / night
             </p>
           </Link>

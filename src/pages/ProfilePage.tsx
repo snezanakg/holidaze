@@ -1,126 +1,163 @@
-import { useState } from "react";
-import { User, Mail, Camera, Building2, CheckCircle, Home } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { Link } from "react-router-dom";
+
+const API_BASE = "https://v2.api.noroff.dev";
+const API_KEY = "2ae3e868-69f2-430f-b7cb-5f7d53949d57";
+
+interface Booking {
+  id: string;
+  dateFrom: string;
+  dateTo: string;
+  venue: {
+    id: string;
+    name: string;
+    media?: { url: string }[];
+  };
+}
 
 export default function ProfilePage() {
-  const { user, updateAvatar } = useAuth();
-  const [avatarUrl, setAvatarUrl] = useState("");
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const { user } = useAuth();
+  const token = localStorage.getItem("holidaze_token");
 
-  const handleUpdateAvatar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!avatarUrl.trim()) return;
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    setIsUpdating(true);
-    setSuccess(false);
+  useEffect(() => {
+    if (!user) return;
+
+    async function fetchBookings() {
+      try {
+        const response = await fetch(
+          `${API_BASE}/holidaze/profiles/${user.name}/bookings?_venue=true`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "X-Noroff-API-Key": API_KEY,
+            },
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.errors?.[0]?.message);
+        }
+
+        setBookings(data.data);
+      } catch (error) {
+        console.error("Failed to load bookings", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchBookings();
+  }, [user]);
+
+  async function handleCancelBooking(id: string) {
+    if (!confirm("Cancel this booking?")) return;
 
     try {
-      await updateAvatar(avatarUrl);
-      setSuccess(true);
-      setAvatarUrl("");
-      setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-      alert("Failed to update avatar");
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+      const response = await fetch(
+        `${API_BASE}/holidaze/bookings/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Noroff-API-Key": API_KEY,
+          },
+        }
+      );
 
-  if (!user) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-12 bg-stone-950 min-h-screen">
-        <p className="text-center text-stone-500 font-serif animate-pulse">
-          Loading Profile...
-        </p>
-      </div>
-    );
+      if (!response.ok) {
+        throw new Error("Failed to cancel booking");
+      }
+
+      // Remove from UI instantly
+      setBookings((prev) => prev.filter((b) => b.id !== id));
+    } catch (error) {
+      alert("Error cancelling booking");
+    }
   }
 
-  const userAvatar =
-    typeof user.avatar === "string" ? user.avatar : user.avatar?.url;
+  if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-stone-950 py-12">
-      <div className="max-w-4xl mx-auto px-4">
-        <div className="flex items-center space-x-4 mb-12">
-          <div className="w-12 h-12 border border-amber-600 flex items-center justify-center">
-            <User className="w-6 h-6 text-amber-500" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-serif text-white uppercase tracking-wider">
-              My Profile
-            </h1>
-            <p className="text-stone-500 text-xs uppercase tracking-widest mt-1">
-              Personal Dashboard
-            </p>
-          </div>
+    <div className="min-h-screen bg-stone-950 py-12 px-6 max-w-6xl mx-auto">
+
+      {/* PROFILE HEADER */}
+      <div className="flex items-center gap-6 mb-12">
+        <img
+          src={user.avatar?.url || "https://placehold.co/100"}
+          alt={user.name}
+          className="w-24 h-24 rounded-full object-cover border border-stone-700"
+        />
+
+        <div>
+          <h1 className="text-3xl font-serif text-white">
+            {user.name}
+          </h1>
+          <p className="text-stone-400">{user.email}</p>
         </div>
+      </div>
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {/* Profile Card */}
-          <div className="bg-stone-900 border border-stone-800 p-8 text-center">
-            {userAvatar ? (
-              <img
-                src={userAvatar}
-                alt={user.name}
-                className="w-32 h-32 object-cover mx-auto border border-stone-800 mb-6"
-              />
-            ) : (
-              <div className="w-32 h-32 bg-stone-950 border border-stone-800 flex items-center justify-center mx-auto mb-6">
-                <User className="w-12 h-12 text-stone-700" />
-              </div>
-            )}
+      {/* BOOKINGS */}
+      <h2 className="text-2xl font-serif text-white mb-6">
+        Upcoming Bookings
+      </h2>
 
-            <h2 className="text-xl font-serif text-white mb-2">
-              {user.name}
-            </h2>
-            <p className="text-stone-500 text-xs mb-4">
-              {user.email}
-            </p>
+      {loading && (
+        <p className="text-stone-400">Loading bookings...</p>
+      )}
 
-            {user.venueManager && (
-              <div className="inline-flex items-center space-x-2 bg-amber-900/10 border border-amber-900/50 text-amber-500 px-4 py-2 text-xs uppercase tracking-widest">
-                <Building2 className="w-3 h-3" />
-                <span>Venue Manager</span>
-              </div>
-            )}
-          </div>
+      {!loading && bookings.length === 0 && (
+        <p className="text-stone-500">
+          You have no bookings yet.
+        </p>
+      )}
 
-          {/* Update Avatar */}
-          <div className="md:col-span-2 bg-stone-900 border border-stone-800 p-8">
-            <h3 className="text-lg font-serif text-white mb-6">
-              Update Portrait
+      <div className="grid md:grid-cols-2 gap-6">
+        {bookings.map((booking) => (
+          <div
+            key={booking.id}
+            className="bg-stone-900 border border-stone-800 p-6 rounded-xl"
+          >
+            <img
+              src={
+                booking.venue.media?.[0]?.url ||
+                "https://placehold.co/600x300"
+              }
+              alt={booking.venue.name}
+              className="w-full h-40 object-cover rounded-lg mb-4"
+            />
+
+            <h3 className="text-white font-semibold mb-2">
+              {booking.venue.name}
             </h3>
 
-            {success && (
-              <div className="mb-6 bg-green-900/10 border border-green-900/30 p-4 flex items-center space-x-3">
-                <CheckCircle className="w-4 h-4 text-green-500" />
-                <p className="text-xs text-green-400">
-                  Portrait updated successfully
-                </p>
-              </div>
-            )}
+            <p className="text-stone-400 text-sm mb-4">
+              {new Date(booking.dateFrom).toLocaleDateString()} –{" "}
+              {new Date(booking.dateTo).toLocaleDateString()}
+            </p>
 
-            <form onSubmit={handleUpdateAvatar} className="space-y-6">
-              <input
-                type="url"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://example.com/image.jpg"
-                className="w-full px-4 py-3 bg-stone-950 border border-stone-800 text-white placeholder-stone-700 focus:outline-none focus:border-amber-600"
-              />
+            <div className="flex justify-between items-center">
+              <Link
+                to={`/venue/${booking.venue.id}`}
+                className="text-amber-500 text-xs uppercase tracking-wider hover:text-amber-400"
+              >
+                View Venue
+              </Link>
 
               <button
-                type="submit"
-                disabled={isUpdating || !avatarUrl.trim()}
-                className="w-full bg-amber-600 text-white py-3 hover:bg-amber-700 transition uppercase tracking-widest text-xs disabled:opacity-50"
+                onClick={() => handleCancelBooking(booking.id)}
+                className="bg-red-700 text-white px-4 py-2 text-xs uppercase tracking-wider hover:bg-red-800 transition"
               >
-                {isUpdating ? "Processing..." : "Update Portrait"}
+                Cancel
               </button>
-            </form>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );

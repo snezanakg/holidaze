@@ -72,24 +72,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await login(email, password);
   }
 
-  async function updateAvatar(url: string) {
-    if (!user) return;
+ async function updateAvatar(url: string) {
+  if (!user) return;
 
-    const data = await fetchFromApi(
-      `/holidaze/profiles/${user.name}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          avatar: { url },
-        }),
-      }
-    );
+  const data = await fetchFromApi(
+    `/holidaze/profiles/${user.name}?_holidaze=true`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        avatar: {
+          url: url,
+        },
+      }),
+    }
+  );
 
-    const updatedUser = data.data;
+  const updatedUser = data.data;
 
-    localStorage.setItem("holidaze_user", JSON.stringify(updatedUser));
-    setUser(updatedUser);
-  }
+  localStorage.setItem("holidaze_user", JSON.stringify(updatedUser));
+  setUser(updatedUser);
+}
+
+    
 
   function logout() {
     localStorage.removeItem("holidaze_token");
